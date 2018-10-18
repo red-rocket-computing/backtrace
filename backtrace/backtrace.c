@@ -162,7 +162,7 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 			for (reg = 4; reg <= (instruction & 0x07) + 4; ++reg)
 				ucb->vrs[reg] = *vsp++;
 
-			if (instruction & 0x80)
+			if (instruction & 0x08)
 				ucb->vrs[14] = *vsp++;
 
 			ucb->vrs[13] = (uint32_t)vsp;
