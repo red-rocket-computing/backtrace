@@ -197,28 +197,30 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 			/* pop VFP double-precision registers */
 			vsp = (uint32_t *)ucb->vrs[13];
 
-			/* D[ssss]-D[ssss+cccc] */
-			ucb->vrs[14] = *vsp++;
+			/* D[ssss]-D[ssss+cccc] or D[16+sssss]-D[16+ssss+cccc] as pushed by VPUSH or FSTMFDX */
+			vsp += 2 * ((unwind_get_next_byte(ucb) & 0x0f) + 1);
 
-			if (instruction == 0xc8) {
-				/* D[16+sssss]-D[16+ssss+cccc] */
-				ucb->vrs[14] |= 1 << 16;
-			}
 
-			if (instruction != 0xb3) {
-				/* D[sssss]-D[ssss+cccc] */
-				ucb->vrs[14] |= 1 << 17;
+			if (instruction == 0xb3) {
+				/* as pushed by FSTMFDX */
+				vsp++;
 			}
 
 			ucb->vrs[13] = (uint32_t)vsp;
 
 		} else if ((instruction & 0xf8) == 0xb8 || (instruction & 0xf8) == 0xd0) {
-			/* Pop VFP double precision registers D[8]-D[8+nnn] */
-			ucb->vrs[14] = 0x80 | (instruction & 0x07);
+			/* pop VFP double-precision registers */
+			vsp = (uint32_t *)ucb->vrs[13];
 
-			if ((instruction & 0xf8) == 0xd0) {
-				ucb->vrs[14] = 1 << 17;
+			/* D[8]-D[8+nnn] as pushed by VPUSH or FSTMFDX */
+			vsp += 2 * ((instruction & 0x07) + 1);
+
+			if ((instruction & 0xf8) == 0xb8) {
+				/* as pushed by FSTMFDX */
+				vsp++;
 			}
+
+			ucb->vrs[13] = (uint32_t)vsp;
 
 		} else
 			return -1;
