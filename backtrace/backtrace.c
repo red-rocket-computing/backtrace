@@ -146,8 +146,9 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 				++reg;
 			}
 
-			/* Patch up the vrs sp if it was in the mask */
-			if ((mask & (1 << (13 - 4))) != 0)
+			/* Update the vrs sp as usual if r13 (sp) was not in the mask,
+			 * otherwise leave the popped r13 as is. */
+			if ((mask & (1 << (13 - 4))) == 0)
 				ucb->vrs[13] = (uint32_t)vsp;
 
 		} else if ((instruction & 0xf0) == 0x90 && instruction != 0x9d && instruction != 0x9f) {
