@@ -135,7 +135,7 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 				return 0;
 
 			/* Pop registers using mask */
-			vsp = (uint32_t *)ucb->vrs[13];
+			vsp = (uint32_t *)&(ucb->vrs[13]);
 			mask = instruction & 0xfff;
 
 			reg = 4;
@@ -156,7 +156,7 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 
 		} else if ((instruction & 0xf0) == 0xa0) {
 			/* pop r4-r[4+nnn] or pop r4-r[4+nnn], r14*/
-			vsp = (uint32_t *)ucb->vrs[13];
+			vsp = (uint32_t *)&(ucb->vrs[13]);
 
 			for (reg = 4; reg <= (instruction & 0x07) + 4; ++reg)
 				ucb->vrs[reg] = *vsp++;
@@ -176,7 +176,7 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 
 		} else if (instruction == 0xb1) {
 			/* pop register under mask {r3,r2,r1,r0} */
-			vsp = (uint32_t *)ucb->vrs[13];
+			vsp = (uint32_t *)&(ucb->vrs[13]);
 			mask = unwind_get_next_byte(ucb);
 
 			reg = 0;
@@ -194,7 +194,7 @@ static int unwind_execute_instruction(unwind_control_block_t *ucb)
 
 		} else if (instruction == 0xb3 || instruction == 0xc8 || instruction == 0xc9) {
 			/* pop VFP double-precision registers */
-			vsp = (uint32_t *)ucb->vrs[13];
+			vsp = (uint32_t *)&(ucb->vrs[13]);
 
 			/* D[ssss]-D[ssss+cccc] */
 			ucb->vrs[14] = *vsp++;
