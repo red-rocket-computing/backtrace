@@ -10,6 +10,46 @@
 #include <stdlib.h>
 #include <string.h>
 
+int _backtrace_unwind(unwind_trace_fn callback, void *context, backtrace_frame_t *frame);
+unwind_code_t default_unwind_callback(backtrace_t *trace, void *context);
+
+/* These symbols point to the unwind index and should be provide by the linker script */
+extern const unwind_index_t __exidx_start[];
+extern const unwind_index_t __exidx_end[];
+
+/* Default unwind context */
+typedef struct
+{
+	backtrace_t *buffer;
+	backtrace_t *buffer_end;
+} default_unwind_context_t;
+
+/* Default unwind handler */
+unwind_code_t default_unwind_callback(backtrace_t *trace, void *context)
+{
+	default_unwind_context_t *ctx = (default_unwind_context_t*) context;
+
+	if(ctx->buffer == ctx->buffer_end)
+		return UNWIND_ABORT;
+
+	ctx->buffer->address = trace->address;
+	ctx->buffer->function = trace->function;
+	ctx->buffer->name = trace->name;
+	ctx->buffer++;
+
+	return ctx->buffer != ctx->buffer_end ? UNWIND_CONTINUE : UNWIND_DONE;
+}
+
+static unwind_code_t collect_backtrace(unwind_trace_fn callback, void *context, backtrace_t *trace, int *count)
+{
+	unwind_code_t res = callback(trace, context);
+
+	if(res == UNWIND_CONTINUE || res == UNWIND_DONE)
+		(*count)++;
+
+	return res;
+}
+
 /* This prevents the linking of libgcc unwinder code */
 void __aeabi_unwind_cpp_pr0(void);
 void __aeabi_unwind_cpp_pr1(void);
@@ -341,24 +381,26 @@ static int unwind_frame(backtrace_frame_t *frame)
 	return 1;
 }
 
-int _backtrace_unwind(backtrace_t *buffer, int size, backtrace_frame_t *frame)
+int _backtrace_unwind(unwind_trace_fn callback, void *context, backtrace_frame_t *frame)
 {
 	int count = 0;
-
-	/* Initialize the backtrace frame buffer */
-	memset(buffer, 0, sizeof(backtrace_t) * size);
+	backtrace_t backtrace;
 
 	/* Unwind all frames */
 	do {
+		memset(&backtrace, 0, sizeof(backtrace_t));
+
 		if (frame->pc == 0) {
 			/* Reached __exidx_end. */
-			buffer[count++].name = "<reached end of unwind table>";
+			backtrace.name = "<reached end of unwind table>";
+			collect_backtrace(callback, context, &backtrace, &count);
 			break;
 		}
 
 		if (frame->pc == 0x00000001) {
 			/* Reached .cantunwind instruction. */
-			buffer[count++].name = "<reached .cantunwind>";
+			backtrace.name = "<reached .cantunwind>";
+			collect_backtrace(callback, context, &backtrace, &count);
 			break;
 		}
 
@@ -369,14 +411,14 @@ int _backtrace_unwind(backtrace_t *buffer, int size, backtrace_frame_t *frame)
 		frame->pc &= 0xfffffffeU;
 
 		/* Generate the backtrace information */
-		buffer[count].address = (void *)frame->pc;
-		buffer[count].function = (void *)prel31_to_addr(&index->addr_offset);
-		buffer[count].name = unwind_get_function_name(buffer[count].function);
+		backtrace.address = (void *)frame->pc;
+		backtrace.function = (void *)prel31_to_addr(&index->addr_offset);
+		backtrace.name = unwind_get_function_name(backtrace.function);
 
-		/* Next backtrace frame */
-		++count;
+		if(collect_backtrace(callback, context, &backtrace, &count) != UNWIND_CONTINUE)
+			break;
 
-	} while (unwind_frame(frame) && count < size);
+	} while (unwind_frame(frame));
 
 	/* All done */
 	return count;
@@ -389,4 +431,20 @@ const char *backtrace_function_name(uint32_t pc)
 		return 0;
 
 	return unwind_get_function_name((void *)prel31_to_addr(&index->addr_offset));
+}
+
+int backtrace_unwind_from_frame(backtrace_t *buffer, int size, backtrace_frame_t *frame)
+{
+	default_unwind_context_t context =
+	{
+		.buffer = buffer,
+		.buffer_end = buffer + size
+	};
+
+	return _backtrace_unwind(default_unwind_callback, &context, frame);
+}
+
+int backtrace_unwind_from_frame_cb(unwind_trace_fn callback, void *context, backtrace_frame_t *frame)
+{
+	return _backtrace_unwind(callback, context, frame);
 }
