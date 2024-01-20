@@ -40,17 +40,23 @@ typedef struct unwind_index
 	uint32_t insn;
 } unwind_index_t;
 
-/* These symbols point to the unwind index and should be provide by the linker script */
-extern const unwind_index_t __exidx_start[];
-extern const unwind_index_t __exidx_end[];
+typedef enum
+{
+	UNWIND_CONTINUE,
+	UNWIND_DONE,
+	UNWIND_ABORT
+} unwind_code_t;
 
-int _backtrace_unwind(backtrace_t *buffer, int size, backtrace_frame_t *frame);
+typedef unwind_code_t (*unwind_trace_fn)(backtrace_t *trace, void *context);
+
 const char *backtrace_function_name(uint32_t pc);
+int backtrace_unwind_from_frame(backtrace_t *buffer, int size, backtrace_frame_t *frame);
+int backtrace_unwind_from_frame_cb(unwind_trace_fn callback, void *context, backtrace_frame_t *frame);
 
-static inline int __attribute__((always_inline)) backtrace_unwind(backtrace_t *buffer, int size)
+static inline backtrace_frame_t __attribute__((always_inline)) construct_backtrace_frame()
 {
 	/* Get the current pc */
-	register uint32_t pc;
+	uint32_t pc;
 	__asm__ volatile("mov %0, pc" : "=r"(pc));
 
 	/* Initialize the stack frame */
@@ -60,8 +66,19 @@ static inline int __attribute__((always_inline)) backtrace_unwind(backtrace_t *b
 	frame.lr = (uint32_t)__builtin_return_address(0);
 	frame.pc = pc;
 
-	/* Let it rip */
-	return _backtrace_unwind(buffer, size, &frame);
+	return frame;
+}
+
+static inline int __attribute__((always_inline)) backtrace_unwind(backtrace_t *buffer, int size)
+{
+	backtrace_frame_t frame = construct_backtrace_frame();
+	return backtrace_unwind_from_frame(buffer, size, &frame);
+}
+
+static inline int __attribute__((always_inline)) backtrace_unwind_cb(unwind_trace_fn callback, void *context)
+{
+	backtrace_frame_t frame = construct_backtrace_frame();
+	return backtrace_unwind_from_frame_cb(callback, context, &frame);
 }
 
 #endif /* BACKTRACE_H_ */
