@@ -17,23 +17,36 @@ to the name of the function (if the GCC -mpoke-function-name option is used).
 
 Backtrace provides the following API:
 
+```C
 	typedef struct backtrace
 	{
 		void *function;   /* Address of the current address */
-		void *address;    /* Calling site address 
+		void *address;    /* Calling site address */
 		const char *name;
 	} backtrace_t;
 
 	/* Unwind the stack from the current address, filling in provided
 	   backtrace bufffer, limited by size of the buffer, return a count
-	   of the valid frames */	
+	   of the valid frames */
 	int backtrace_unwind(backtrace_t *backtrace, int size)
 
+	/* Unwind the stack from the current address, calling the specified callback
+	   for each frame. Stack traversion will stop on stack end or when the callback
+	   returns anything but UNWIND_CONTINUE. */
+	int backtrace_unwind_cb(unwind_trace_fn callback, void *context);
+
+	/* Same as backtrace_unwind but iterates over a user specified frame */
+	int backtrace_unwind_from_frame(backtrace_t *buffer, int size, backtrace_frame_t *frame);
+
+	/* Same as backtrace_unwind_cb but iterates over a user specified frame */
+	int backtrace_unwind_from_frame_cb(unwind_trace_fn callback, void *context, backtrace_frame_t *frame);
+
 	/* Return a pointer to the function name at the specified address or
-	   "unknown" if the function name string is not present.  The address
-	    can be the entry point for the function or any address within the
-	    function's scope. */
+	   "unknown" if the function name string is not present. The address
+	   can be the entry point for the function or any address within the
+	   function's scope. */
 	const char *backtrace_function_name(uint32_t pc);
+```C
 
 ARM estimates the overhead for the unwind tables at 2.6% to 3.6%
 (see /doc/IHI0038B_ehabi.pdf). Using the -mpoke-function-name option increases
@@ -61,16 +74,20 @@ Dependencies
 
 Backtrace requires a compatible/working ARM cross compiler supporting the following built-ins:
 
+```C
 	__builtin_return_address /* Get the return address for the current function */
 	__builtin_frame_address /* Get the current frame pointer */
+```
 
 and is known to work with recent version of gcc
 (see https://launchpad.net/gcc-arm-embedded).
 
 In addition your linker scripts should export the following symbols:
 
+```C
 	__exidx_start /* Pointing to the start of the unwind index table */
 	__exidx_end   /* Pointing to the end of the unwind index table */
+```
 
 Building
 --------
@@ -150,6 +167,7 @@ Using The Unwinder
 		/* All good */
 		return 0;
 	}
+```
 
 To compile and link this sample using a recent GCC ARM Embedded compiler:
 
